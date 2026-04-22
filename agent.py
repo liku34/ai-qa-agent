@@ -1,4 +1,4 @@
-import ollama
+import subprocess
 import asyncio
 import sys
 import os
@@ -8,6 +8,26 @@ from bs4 import BeautifulSoup
 
 from openai import OpenAI
 import google.genai as genai
+
+
+# =====================================
+# AUTO-INSTALL PLAYWRIGHT BROWSERS
+# (Required for Streamlit Cloud)
+# =====================================
+def install_playwright_browsers():
+    try:
+        result = subprocess.run(
+            ["playwright", "install", "chromium"],
+            capture_output=True, text=True
+        )
+        print(result.stdout)
+        if result.returncode != 0:
+            print(f"Warning: {result.stderr}")
+    except Exception as e:
+        print(f"Playwright install error: {e}")
+
+install_playwright_browsers()
+
 
 # =====================================
 # FIX Windows Playwright Issue
@@ -32,7 +52,7 @@ def get_secret(key_name):
 
 
 # =====================================
-# 1️⃣ WEBSITE SCRAPER
+# 1 WEBSITE SCRAPER
 # =====================================
 def get_website_content(url):
     try:
@@ -47,42 +67,37 @@ def get_website_content(url):
 
             soup = BeautifulSoup(content, "html.parser")
 
-            # Remove unnecessary tags
             for tag in soup(["script", "style", "noscript", "svg", "img"]):
                 tag.decompose()
 
-            # Extract visible text
             text = soup.get_text(separator="\n", strip=True)
             clean_text = "\n".join(
                 line for line in text.splitlines() if line.strip()
             )
 
-            return clean_text[:6000]  # Limit size for LLM safety
+            return clean_text[:6000]
 
     except Exception as e:
         return f"Error fetching website: {str(e)}"
 
 
 # =====================================
-# 2️⃣ MAIN ROUTER
+# 2 MAIN ROUTER
 # =====================================
 def generate_test_cases(url, model_choice):
 
     if model_choice == "Local LLM (Ollama)":
         return generate_with_ollama(url)
-
     elif model_choice == "OpenAI GPT-4":
         return generate_with_openai(url)
-
     elif model_choice == "Gemini":
         return generate_with_gemini(url)
-
     else:
         return "Invalid model selected"
 
 
 # =====================================
-# 3️⃣ PROMPT BUILDER
+# 3 PROMPT BUILDER
 # =====================================
 def build_prompt(url, content):
 
@@ -112,98 +127,71 @@ Website Content:
 
 
 # =====================================
-# 4️⃣ OLLAMA
+# 4 OLLAMA
 # =====================================
 def generate_with_ollama(url):
-
     try:
+        import ollama
         content = get_website_content(url)
-
         if content.startswith("Error fetching"):
             return content
-
         prompt = build_prompt(url, content)
-
         response = ollama.chat(
             model="mistral",
             messages=[
-                {
-                    "role": "system",
-                    "content": "You generate only structured QA test cases in markdown table format. No extra explanation."
-                },
+                {"role": "system", "content": "You generate only structured QA test cases in markdown table format. No extra explanation."},
                 {"role": "user", "content": prompt}
             ]
         )
-
         return response["message"]["content"]
-
     except Exception as e:
         return f"Ollama Error: {str(e)}"
 
 
 # =====================================
-# 5️⃣ OPENAI
+# 5 OPENAI
 # =====================================
 def generate_with_openai(url):
-
     try:
         api_key = get_secret("OPENAI_API_KEY")
         if not api_key:
             return "OpenAI Error: OPENAI_API_KEY not set. Please add it in sidebar or .streamlit/secrets.toml"
-
         content = get_website_content(url)
-
         if content.startswith("Error fetching"):
             return content
-
         prompt = build_prompt(url, content)
-
         client = OpenAI(api_key=api_key)
-
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {
-                    "role": "system",
-                    "content": "You generate only structured QA test cases in markdown table format. No extra explanation."
-                },
+                {"role": "system", "content": "You generate only structured QA test cases in markdown table format. No extra explanation."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.3,
             max_tokens=3000
         )
-
         return response.choices[0].message.content
-
     except Exception as e:
         return f"OpenAI Error: {str(e)}"
 
 
 # =====================================
-# 6️⃣ GEMINI
+# 6 GEMINI
 # =====================================
 def generate_with_gemini(url):
-
     try:
         api_key = get_secret("GEMINI_API_KEY")
         if not api_key:
             return "Gemini Error: GEMINI_API_KEY not set. Please add it in sidebar or .streamlit/secrets.toml"
-
         content = get_website_content(url)
-
         if content.startswith("Error fetching"):
             return content
-
         prompt = build_prompt(url, content)
-
         client = genai.Client(api_key=api_key)
-
         response = client.models.generate_content(
             model="gemini-2.0-flash",
             contents=prompt,
         )
-
         return response.text
-
     except Exception as e:
         return f"Gemini Error: {str(e)}"
