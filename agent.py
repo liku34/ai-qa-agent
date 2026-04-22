@@ -189,7 +189,7 @@ def generate_with_gemini(url):
         prompt = build_prompt(url, content)
         client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
-            model="gemini-2.0-flash-exp",
+            model="gemini-2.5-pro-exp-03-25",
             contents=prompt,
         )
         return response.text
